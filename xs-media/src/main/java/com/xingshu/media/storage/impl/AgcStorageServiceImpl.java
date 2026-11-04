@@ -16,7 +16,6 @@ import com.xingshu.media.storage.StorageService;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -48,16 +47,10 @@ public class AgcStorageServiceImpl implements StorageService {
 
     private final StorageProperties properties;
     private final ResourceLoader resourceLoader;
-
-    @Value("${spring.application.name:xs-app}")
-    private String appName;
-
-    /** xs-config 地址：存储凭据由管理员在后台维护，服务启动时拉取 */
-    @Value("${xingshu.storage.config-service-url:http://localhost:8086}")
-    private String configServiceUrl;
-
-    @Value("${xingshu.internal-token:xingshu-internal-2026}")
-    private String internalToken;
+    private final String appName;
+    /** xs-config 地址：存储凭据由管理员在后台维护 */
+    private final String configServiceUrl;
+    private final String internalToken;
 
     private StorageManagement storageManagement;
     private boolean initialized = false;
@@ -69,8 +62,17 @@ public class AgcStorageServiceImpl implements StorageService {
             .build();
 
     public AgcStorageServiceImpl(StorageProperties properties, ResourceLoader resourceLoader) {
+        this(properties, resourceLoader, "xs-app",
+                "http://localhost:8086", "xingshu-internal-2026");
+    }
+
+    public AgcStorageServiceImpl(StorageProperties properties, ResourceLoader resourceLoader,
+                                 String appName, String configServiceUrl, String internalToken) {
         this.properties = properties;
         this.resourceLoader = resourceLoader;
+        this.appName = appName;
+        this.configServiceUrl = configServiceUrl;
+        this.internalToken = internalToken;
     }
 
     @PostConstruct

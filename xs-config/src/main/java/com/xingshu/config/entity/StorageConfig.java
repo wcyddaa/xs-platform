@@ -22,8 +22,11 @@ public class StorageConfig extends BaseEntity {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 存储类型：agc-华为AGC */
+    /** 存储类型：agc-华为AGC / oss-阿里云 / cos-腾讯云 / local-仅本地 */
     private String provider;
+
+    /** 接入地址：OSS endpoint；AGC/COS 可留空；local 不使用 */
+    private String endpoint;
 
     private String bucket;
 

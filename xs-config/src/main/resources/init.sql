@@ -98,11 +98,12 @@ INSERT INTO `model_config` (`config_type`, `agent_name`, `model_name`, `base_url
 -- 对象存储配置表（平台级，仅管理员维护；client_secret 以 AES-GCM 密文保存）
 CREATE TABLE IF NOT EXISTS `storage_config` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    `provider` VARCHAR(20) NOT NULL DEFAULT 'agc' COMMENT '存储类型：agc-华为AGC',
+    `provider` VARCHAR(20) NOT NULL DEFAULT 'agc' COMMENT '存储类型：agc/oss/cos/local',
+    `endpoint` VARCHAR(200) DEFAULT NULL COMMENT '接入地址（OSS endpoint，AGC/COS 可空）',
     `bucket` VARCHAR(100) DEFAULT NULL COMMENT '存储桶名称',
     `region` VARCHAR(50) DEFAULT 'cn-east-3' COMMENT '区域',
-    `client_id` VARCHAR(100) DEFAULT NULL COMMENT 'AGC client_id',
-    `client_secret` VARCHAR(500) DEFAULT NULL COMMENT 'AGC client_secret（加密后存储）',
+    `client_id` VARCHAR(200) DEFAULT NULL COMMENT '接入标识：AGC client_id / OSS AccessKeyId / COS SecretId',
+    `client_secret` VARCHAR(500) DEFAULT NULL COMMENT '接入密钥：AGC client_secret / OSS AccessKeySecret / COS SecretKey（加密后存储）',
     `status` VARCHAR(20) NOT NULL DEFAULT 'untested' COMMENT '测试状态：untested/success/fail',
     `test_message` VARCHAR(500) DEFAULT NULL COMMENT '最近一次测试结果说明',
     `last_test_time` DATETIME DEFAULT NULL COMMENT '最近一次测试时间',
