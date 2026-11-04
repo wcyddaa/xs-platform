@@ -56,7 +56,7 @@ public class AgcStorageServiceImpl implements StorageService {
     @Value("${xingshu.storage.config-service-url:http://localhost:8086}")
     private String configServiceUrl;
 
-    @Value("${xingshu.auth.internal-token:xingshu-internal-2026}")
+    @Value("${xingshu.internal-token:xingshu-internal-2026}")
     private String internalToken;
 
     private StorageManagement storageManagement;
