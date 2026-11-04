@@ -1,5 +1,6 @@
 package com.xingshu.media.config;
 
+import com.xingshu.media.storage.MediaFileStore;
 import com.xingshu.media.storage.StorageService;
 import com.xingshu.media.storage.StorageType;
 import org.slf4j.Logger;
@@ -70,6 +71,12 @@ public class StorageAutoConfiguration {
                 yield new NoOpStorageService();
             }
         };
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public MediaFileStore mediaFileStore(StorageProperties properties, StorageService storageService) {
+        return new MediaFileStore(properties, storageService);
     }
 
     /**

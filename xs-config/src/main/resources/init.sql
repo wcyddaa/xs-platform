@@ -95,3 +95,22 @@ INSERT INTO `model_config` (`config_type`, `agent_name`, `model_name`, `base_url
 ('LLM', 'knowledge_graph', 'qwen-plus', 'https://dashscope.aliyuncs.com/compatible-mode/v1', '', 0.3, 4096, 'untested', 0),
 ('LLM', 'student_insight', 'qwen-plus', 'https://dashscope.aliyuncs.com/compatible-mode/v1', '', 0.3, 4096, 'untested', 0),
 ('EMBEDDING', 'default', 'BAAI/bge-m3', 'https://api.siliconflow.cn', '', 0.0, 0, 'untested', 0);
+-- 对象存储配置表（平台级，仅管理员维护；client_secret 以 AES-GCM 密文保存）
+CREATE TABLE IF NOT EXISTS `storage_config` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `provider` VARCHAR(20) NOT NULL DEFAULT 'agc' COMMENT '存储类型：agc-华为AGC',
+    `bucket` VARCHAR(100) DEFAULT NULL COMMENT '存储桶名称',
+    `region` VARCHAR(50) DEFAULT 'cn-east-3' COMMENT '区域',
+    `client_id` VARCHAR(100) DEFAULT NULL COMMENT 'AGC client_id',
+    `client_secret` VARCHAR(500) DEFAULT NULL COMMENT 'AGC client_secret（加密后存储）',
+    `status` VARCHAR(20) NOT NULL DEFAULT 'untested' COMMENT '测试状态：untested/success/fail',
+    `test_message` VARCHAR(500) DEFAULT NULL COMMENT '最近一次测试结果说明',
+    `last_test_time` DATETIME DEFAULT NULL COMMENT '最近一次测试时间',
+    `enabled` TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用：1-启用 0-停用',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `creater_id` BIGINT DEFAULT NULL COMMENT '创建者ID',
+    `updater_id` BIGINT DEFAULT NULL COMMENT '更新者ID',
+    PRIMARY KEY (`id`),
+    INDEX `idx_enabled` (`enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='对象存储配置表';

@@ -40,14 +40,14 @@ spring:
         dimensions: 1024
         similarity: cosine
 
-# 本地文件存储
-app:
-  upload-dir: uploads
-
-# AGC 云存储配置（由 xs-media 模块统一管理）
+# 文件存储统一由 xs-media 管理：教材/课件/作业附件都在 local-root 下分类存放
 xingshu:
   storage:
+    # 默认用户目录下的 XingShuEnv，与启动工作目录无关
+    local-root: ${XINGSHU_UPLOAD_DIR:${user.home}/XingShuEnv/uploads}
     type: agc
     agc:
       bucket: "pdf-dwad8"
       region: cn-east-3
+      # 凭据放在仓库外，可用环境变量 XINGSHU_AGC_CREDENTIALS 覆盖
+      credentials-file: ${XINGSHU_AGC_CREDENTIALS:${user.home}/XingShuEnv/agc-apiclient.json}

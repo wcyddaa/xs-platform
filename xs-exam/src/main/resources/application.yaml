@@ -30,12 +30,12 @@ mybatis-plus:
 knife4j:
   enable: true
 
-# 本地文件存储
-app:
-  upload-dir: uploads
-
-# AGC 云存储配置
-agc:
-  cloud-storage:
-    enabled: true
-    bucket-name: "pdf-dwad8"
+# 文件存储统一由 xs-media 管理：作业附件存放在 local-root/homework 下
+xingshu:
+  storage:
+    local-root: ${XINGSHU_UPLOAD_DIR:${user.home}/XingShuEnv/uploads}
+    type: agc
+    agc:
+      bucket: "pdf-dwad8"
+      region: cn-east-3
+      credentials-file: ${XINGSHU_AGC_CREDENTIALS:${user.home}/XingShuEnv/agc-apiclient.json}

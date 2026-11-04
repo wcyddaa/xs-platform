@@ -1,0 +1,9 @@
+{
+  "type": "project_client_id",
+  "developer_id": "<AGC 开发者ID>",
+  "project_id": "<AGC 项目ID>",
+  "client_id": "<AGC 客户端ID>",
+  "client_secret": "<AGC 客户端密钥，请勿提交>",
+  "configuration_version": "3.0",
+  "region": "CN"
+}

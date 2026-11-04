@@ -10,3 +10,7 @@ target/
 uploads/
 logs/
 *.log
+
+# 云端凭据（严禁提交，使用外部文件或环境变量 XINGSHU_AGC_CREDENTIALS）
+agc-apiclient.json
+**/agc-apiclient.json

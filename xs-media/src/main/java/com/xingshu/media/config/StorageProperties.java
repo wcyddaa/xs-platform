@@ -25,6 +25,14 @@ public class StorageProperties {
     /** 存储类型：agc / oss / cos / s3 */
     private StorageType type = StorageType.AGC;
 
+    /**
+     * 本地文件根目录（教材/课件/作业附件统一存放）。
+     * 默认放在用户目录下的 XingShuEnv，与各服务的启动工作目录无关；
+     * 可用环境变量 XINGSHU_UPLOAD_DIR 覆盖。
+     */
+    private String localRoot = System.getProperty("user.home") + java.io.File.separator
+            + "XingShuEnv" + java.io.File.separator + "uploads";
+
     /** 华为 AGC 配置 */
     private AgcConfig agc = new AgcConfig();
 
@@ -43,6 +51,12 @@ public class StorageProperties {
         private String secret;
         private String bucket;
         private String region = "cn-east-3";
+        /**
+         * AGC 凭据文件路径（外部文件，不进代码仓库）。
+         * 可用环境变量 XINGSHU_AGC_CREDENTIALS 指定；
+         * 未配置时回退到 classpath:agc-apiclient.json（仅兼容旧环境）。
+         */
+        private String credentialsFile;
     }
 
     @Data

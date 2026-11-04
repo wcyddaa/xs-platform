@@ -19,7 +19,9 @@ spring:
 # 云存储配置
 xingshu:
   storage:
+    local-root: ${XINGSHU_UPLOAD_DIR:${user.home}/XingShuEnv/uploads}
     type: agc
     agc:
       bucket: "pdf-dwad8"
       region: cn-east-3
+      credentials-file: ${XINGSHU_AGC_CREDENTIALS:${user.home}/XingShuEnv/agc-apiclient.json}
