@@ -61,6 +61,11 @@ public class SecretCipher {
         }
     }
 
+    /** 是否为已加密存储的值 */
+    public boolean isEncrypted(String stored) {
+        return stored != null && stored.startsWith(PREFIX);
+    }
+
     /** 兼容历史明文数据：非 enc:v1: 前缀直接返回 */
     public String decrypt(String stored) {
         if (stored == null || stored.isBlank() || !stored.startsWith(PREFIX)) {

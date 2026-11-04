@@ -7,6 +7,7 @@ import com.xingshu.config.constant.AgentTemplates;
 import com.xingshu.config.entity.AgentClassConfig;
 import com.xingshu.config.entity.ModelConfig;
 import com.xingshu.config.mapper.AgentClassConfigMapper;
+import com.xingshu.config.security.SecretCipher;
 import com.xingshu.config.service.IAgentClassConfigService;
 import com.xingshu.config.service.IModelConfigService;
 import com.xingshu.config.service.IQuotaService;
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.annotation.PostConstruct;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -28,13 +30,35 @@ public class AgentClassConfigServiceImpl extends ServiceImpl<AgentClassConfigMap
     private final IModelConfigService modelConfigService;
     private final IQuotaService quotaService;
     private final ModelConnectionTester connectionTester;
+    private final SecretCipher secretCipher;
 
     public AgentClassConfigServiceImpl(IModelConfigService modelConfigService,
                                        IQuotaService quotaService,
-                                       ModelConnectionTester connectionTester) {
+                                       ModelConnectionTester connectionTester,
+                                       SecretCipher secretCipher) {
         this.modelConfigService = modelConfigService;
         this.quotaService = quotaService;
         this.connectionTester = connectionTester;
+        this.secretCipher = secretCipher;
+    }
+
+    /** 启动时把历史上明文保存的实例密钥迁移为密文（幂等） */
+    @PostConstruct
+    public void encryptLegacyApiKeys() {
+        try {
+            for (AgentClassConfig row : list()) {
+                String key = row.getApiKey();
+                if (key != null && !key.isBlank() && !secretCipher.isEncrypted(key)) {
+                    AgentClassConfig update = new AgentClassConfig();
+                    update.setId(row.getId());
+                    update.setApiKey(secretCipher.encrypt(key));
+                    updateById(update);
+                    log.info("已将智能体实例 {} 的明文密钥迁移为密文", row.getId());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("历史实例密钥加密迁移失败（不影响启动）：{}", e.getMessage());
+        }
     }
 
     @Override
@@ -192,7 +216,8 @@ public class AgentClassConfigServiceImpl extends ServiceImpl<AgentClassConfigMap
             throw new IllegalStateException("该智能体使用的模型已被停用，请联系教师重新选择");
         }
         config.setBaseUrl(model.getBaseUrl());
-        config.setApiKey(model.getApiKey());
+        // 库中模型密钥为密文，运行时返回解密后的真实密钥
+        config.setApiKey(secretCipher.decrypt(model.getApiKey()));
         config.setModelName(model.getModelName());
     }
 

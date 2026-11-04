@@ -5,9 +5,13 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xingshu.config.entity.ModelConfig;
 import com.xingshu.config.dto.ModelConfigDTO;
 import com.xingshu.config.mapper.ModelConfigMapper;
+import com.xingshu.config.security.SecretCipher;
 import com.xingshu.config.service.IModelConfigService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -18,10 +22,35 @@ import java.util.stream.Collectors;
 @Service
 public class ModelConfigServiceImpl extends ServiceImpl<ModelConfigMapper, ModelConfig> implements IModelConfigService {
 
-    private final ModelConnectionTester connectionTester;
+    private static final Logger log = LoggerFactory.getLogger(ModelConfigServiceImpl.class);
 
-    public ModelConfigServiceImpl(ModelConnectionTester connectionTester) {
+    private final ModelConnectionTester connectionTester;
+    private final SecretCipher secretCipher;
+
+    public ModelConfigServiceImpl(ModelConnectionTester connectionTester, SecretCipher secretCipher) {
         this.connectionTester = connectionTester;
+        this.secretCipher = secretCipher;
+    }
+
+    /**
+     * 启动时把历史上明文保存的模型密钥迁移为密文（幂等，可重复执行）。
+     */
+    @PostConstruct
+    public void encryptLegacyApiKeys() {
+        try {
+            for (ModelConfig row : list()) {
+                String key = row.getApiKey();
+                if (key != null && !key.isBlank() && !secretCipher.isEncrypted(key)) {
+                    ModelConfig update = new ModelConfig();
+                    update.setId(row.getId());
+                    update.setApiKey(secretCipher.encrypt(key));
+                    updateById(update);
+                    log.info("已将模型配置 {} 的明文密钥迁移为密文", row.getId());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("历史模型密钥加密迁移失败（不影响启动）：{}", e.getMessage());
+        }
     }
 
     @Override
@@ -100,8 +129,9 @@ public class ModelConfigServiceImpl extends ServiceImpl<ModelConfigMapper, Model
                 throw new IllegalArgumentException("模型配置不存在");
             }
             boolean keyProvided = dto.getApiKey() != null && !dto.getApiKey().isBlank();
-            // 未填写密钥时保留原密钥，避免管理端脱敏回显后覆盖
-            config.setApiKey(keyProvided ? dto.getApiKey().trim() : existing.getApiKey());
+            // 未填写密钥时保留原密钥，避免管理端脱敏回显后覆盖；库中只保存密文
+            config.setApiKey(keyProvided ? secretCipher.encrypt(dto.getApiKey().trim())
+                    : secretCipher.encrypt(existing.getApiKey()));
 
             boolean endpointChanged = keyProvided
                     || !Objects.equals(existing.getBaseUrl(), dto.getBaseUrl())
@@ -124,6 +154,8 @@ public class ModelConfigServiceImpl extends ServiceImpl<ModelConfigMapper, Model
             return getById(config.getId());
         }
 
+        config.setApiKey(dto.getApiKey() == null || dto.getApiKey().isBlank()
+                ? null : secretCipher.encrypt(dto.getApiKey().trim()));
         config.setTestStatus("untested");
         config.setEnabled(0);
         save(config);
@@ -142,7 +174,7 @@ public class ModelConfigServiceImpl extends ServiceImpl<ModelConfigMapper, Model
             throw new IllegalArgumentException("模型配置不存在");
         }
         ModelConnectionTester.Result result = connectionTester.test(
-                config.getBaseUrl(), config.getApiKey(), config.getModelName());
+                config.getBaseUrl(), secretCipher.decrypt(config.getApiKey()), config.getModelName());
 
         ModelConfig update = new ModelConfig();
         update.setId(id);

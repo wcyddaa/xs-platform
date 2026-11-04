@@ -4,6 +4,7 @@ import com.xingshu.common.base.ApiResponse;
 import com.xingshu.config.dto.ModelConfigDTO;
 import com.xingshu.config.entity.ModelConfig;
 import com.xingshu.config.security.AuthContext;
+import com.xingshu.config.security.SecretCipher;
 import com.xingshu.config.service.IModelConfigService;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,9 +20,11 @@ import java.util.Map;
 public class ModelConfigController {
 
     private final IModelConfigService modelConfigService;
+    private final SecretCipher secretCipher;
 
-    public ModelConfigController(IModelConfigService modelConfigService) {
+    public ModelConfigController(IModelConfigService modelConfigService, SecretCipher secretCipher) {
         this.modelConfigService = modelConfigService;
+        this.secretCipher = secretCipher;
     }
 
     /**
@@ -218,7 +221,7 @@ public class ModelConfigController {
         Map<String, Object> result = new HashMap<>();
         result.put("modelName", config.getModelName());
         result.put("baseUrl", config.getBaseUrl());
-        result.put("apiKey", config.getApiKey());
+        result.put("apiKey", secretCipher.decrypt(config.getApiKey()));
         result.put("temperature", config.getTemperature());
         result.put("maxTokens", config.getMaxTokens());
         return ApiResponse.success(result);
