@@ -1,0 +1,52 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: xs-book
+
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
+
+  elasticsearch:
+    # 评委按指引启动的 ES 已关闭安全认证，默认 http://localhost:9200
+    uris: ${XINGSHU_ES_URI:http://localhost:9200}
+    username: ${XINGSHU_ES_USERNAME:}
+    password: ${XINGSHU_ES_PASSWORD:}
+
+  ai:
+    openai:
+      base-url: https://api.siliconflow.cn
+      # 不提交真实密钥，启动脚本会注入 XINGSHU_EMBEDDING_API_KEY
+      api-key: ${XINGSHU_EMBEDDING_API_KEY:}
+      embedding:
+        options:
+          model: BAAI/bge-m3
+
+    vectorstore:
+      elasticsearch:
+        index-name: textbook_chunk_vector
+        dimensions: 1024
+        similarity: cosine
+
+# 本地文件存储
+app:
+  upload-dir: uploads
+
+# AGC 云存储配置（由 xs-media 模块统一管理）
+xingshu:
+  storage:
+    type: agc
+    agc:
+      bucket: "pdf-dwad8"
+      region: cn-east-3

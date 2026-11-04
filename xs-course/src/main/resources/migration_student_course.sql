@@ -1,0 +1,15 @@
+-- 学生选课表
+CREATE TABLE IF NOT EXISTS student_course (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    student_id BIGINT NOT NULL COMMENT '学生ID',
+    course_id BIGINT NOT NULL COMMENT '课程ID',
+    enroll_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '选课时间',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    creater_id BIGINT DEFAULT NULL,
+    updater_id BIGINT DEFAULT NULL,
+    UNIQUE KEY uk_student_course (student_id, course_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学生选课表';
+
+-- 课程表添加创建者姓名列
+ALTER TABLE course ADD COLUMN IF NOT EXISTS creater_name VARCHAR(64) DEFAULT '' COMMENT '创建者姓名（教师名）';

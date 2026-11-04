@@ -1,0 +1,35 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: xs-config
+  datasource:
+    url: jdbc:mysql://localhost:3306/xs-config?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 1234
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchClientAutoConfiguration
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  global-config:
+    db-config:
+      id-type: auto
+  configuration:
+    map-underscore-to-camel-case: true
+
+knife4j:
+  enable: true
+
+# 鉴权配置
+xingshu:
+  auth:
+    base-url: http://localhost:8081
+  course:
+    base-url: http://localhost:8082
+  # 内部服务令牌：FastAPI、xs-course、xs-book、xs-user 调用内部接口时携带
+  internal-token: xingshu-internal-2026

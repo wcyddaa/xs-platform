@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: xs-exam
+
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/xs-exam?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
+    username: root
+    password: 1234
+
+server:
+  port: 8084
+
+mybatis-plus:
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+knife4j:
+  enable: true
+
+# 本地文件存储
+app:
+  upload-dir: uploads
+
+# AGC 云存储配置
+agc:
+  cloud-storage:
+    enabled: true
+    bucket-name: "pdf-dwad8"
