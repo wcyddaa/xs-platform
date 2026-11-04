@@ -27,8 +27,7 @@ spring:
   ai:
     openai:
       base-url: https://api.siliconflow.cn
-      # 不提交真实密钥，启动脚本会注入 XINGSHU_EMBEDDING_API_KEY
-      api-key: ${XINGSHU_EMBEDDING_API_KEY:}
+      # 向量模型密钥不落配置文件/环境变量，统一从 xs-config 的受保护内部接口读取
       embedding:
         options:
           model: BAAI/bge-m3
