@@ -35,6 +35,10 @@ public class AuthInterceptor implements HandlerInterceptor {
         String requestInternalToken = request.getHeader(INTERNAL_TOKEN_HEADER);
         if (requestInternalToken != null && !requestInternalToken.isBlank()
                 && internalToken != null && internalToken.equals(requestInternalToken)) {
+            // 内部令牌含模型密钥读取权限，仅允许本机服务调用，避免局域网内被滥用
+            if (!isLoopback(request.getRemoteAddr())) {
+                throw AuthException.forbidden("内部接口仅允许本机访问");
+            }
             AuthContext.set(new AuthUser(null, "internal", "内部服务", 1, true));
             return true;
         }
@@ -54,5 +58,15 @@ public class AuthInterceptor implements HandlerInterceptor {
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
                                Object handler, Exception ex) {
         AuthContext.clear();
+    }
+
+    private static boolean isLoopback(String address) {
+        if (address == null) {
+            return false;
+        }
+        return "127.0.0.1".equals(address)
+                || "::1".equals(address)
+                || "0:0:0:0:0:0:0:1".equals(address)
+                || address.startsWith("127.");
     }
 }
