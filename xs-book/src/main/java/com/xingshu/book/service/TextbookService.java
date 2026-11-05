@@ -59,6 +59,79 @@ public class TextbookService {
     }
 
     /**
+     * 提取教材目录摘要（扫描前若干页的目录文本，解析章节标题）
+     *
+     * 供 AI 在对话开始时就"知道这本书大概讲什么"，而不必先做向量检索。
+     */
+    public List<String> extractOutline(String textbookId, int scanPages) {
+        List<String> chapters = new java.util.ArrayList<>();
+        try {
+            SearchResponse<JsonNode> response = elasticsearchClient.search(s -> s
+                    .index("textbook_chunk_vector")
+                    .query(q -> q.bool(b -> b
+                            .filter(f -> f.term(t -> t.field("metadata.textbookId").value(textbookId)))
+                            .filter(f -> f.range(r -> r.number(n -> n
+                                    .field("metadata.startPage")
+                                    .lte((double) scanPages))))))
+                    .sort(so -> so.field(fs -> fs
+                            .field("metadata.chunkIndex")
+                            .order(co.elastic.clients.elasticsearch._types.SortOrder.Asc)))
+                    .size(120),
+                    JsonNode.class);
+
+            // 目录行形如「3.7 softmax回归的简洁实现 . . . 123」
+            java.util.regex.Pattern anyLevel = java.util.regex.Pattern.compile(
+                    "^\\s*(\\d{1,2}(?:\\.\\d+){0,2})\\s+([^\\s.].{1,38}?)\\s*(?:\\.\\s*){2,}.*$");
+            // 只取一级章标题：形如「3 线性神经网络 85」或「3 线性神经网络 . . . 85」
+            java.util.regex.Pattern topLevel = java.util.regex.Pattern.compile(
+                    "^\\s*(\\d{1,2})\\s+([^\\s.][^\\r\\n]{1,40}?)\\s+(?:(?:\\.\\s*){2,})?\\d{1,4}\\s*$");
+
+            java.util.LinkedHashSet<String> topChapters = new java.util.LinkedHashSet<>();
+            java.util.LinkedHashSet<String> allEntries = new java.util.LinkedHashSet<>();
+
+            for (var hit : response.hits().hits()) {
+                JsonNode source = hit.source();
+                if (source == null || !source.hasNonNull("content")) {
+                    continue;
+                }
+                for (String line : source.get("content").asText().split("\\r?\\n")) {
+                    var all = anyLevel.matcher(line);
+                    if (all.matches()) {
+                        allEntries.add(all.group(1) + " " + all.group(2).trim());
+                    }
+                    var top = topLevel.matcher(line);
+                    if (top.matches()) {
+                        topChapters.add(top.group(1) + " " + top.group(2).trim());
+                    }
+                }
+            }
+            // 一级章节足够多时优先用它，否则退回全部层级
+            java.util.LinkedHashSet<String> chosen = topChapters.size() >= 3 ? topChapters : allEntries;
+            // 章号必须递增：过滤正文里偶然匹配到的「5 定义训练函数」这类噪声
+            int lastChapterNo = 0;
+            for (String entry : chosen) {
+                int chapterNo;
+                try {
+                    chapterNo = Integer.parseInt(entry.split(" ", 2)[0]);
+                } catch (NumberFormatException ex) {
+                    continue;
+                }
+                if (chapterNo <= lastChapterNo) {
+                    continue;
+                }
+                lastChapterNo = chapterNo;
+                chapters.add(entry);
+                if (chapters.size() >= 20) {
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("解析教材 {} 目录失败: {}", textbookId, e.getMessage());
+        }
+        return chapters;
+    }
+
+    /**
      * 根据ID查询教材
      */
     public Optional<TextbookEntity> findById(String id) {

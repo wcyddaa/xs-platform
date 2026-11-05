@@ -96,6 +96,24 @@ public class TextbookController {
         return ApiResponse.success(stats);
     }
 
+    /**
+     * 获取教材目录摘要（供 AI 对话开始时了解教材大致内容）
+     * GET /api/textbooks/{id}/outline
+     */
+    @GetMapping("/{id}/outline")
+    public ApiResponse<Map<String, Object>> outline(@PathVariable String id) {
+        return textbookService.findById(id)
+                .map(entity -> {
+                    Map<String, Object> data = new HashMap<>();
+                    data.put("id", entity.getId());
+                    data.put("title", entity.getTitle());
+                    data.put("totalPages", entity.getTotalPages());
+                    data.put("chapters", textbookService.extractOutline(id, 15));
+                    return ApiResponse.success(data);
+                })
+                .orElseGet(() -> ApiResponse.error(404, "教材不存在"));
+    }
+
     // ==================== 教材元数据 CRUD ====================
 
     /**
