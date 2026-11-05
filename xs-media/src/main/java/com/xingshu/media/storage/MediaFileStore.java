@@ -3,6 +3,7 @@ package com.xingshu.media.storage;
 import com.xingshu.media.config.StorageProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 
@@ -59,18 +60,23 @@ public class MediaFileStore {
         return dir(category, key).resolve(safeName(fileName));
     }
 
-    /** 保存文件：本地落盘 + 云存储同步（云端失败只告警，不影响本地） */
+    /** 保存文件：只写到当前启用的存储（云端启用时不再同时落本地） */
     public Path save(FileCategory category, String key, String fileName, byte[] bytes, String contentType) throws IOException {
         Path target = path(category, key, fileName);
+        if (storageService.isRemoteEnabled()) {
+            String cloudPath = cloudPath(category, key, fileName);
+            try {
+                storageService.uploadFile(bytes, contentType, cloudPath, null);
+                log.info("{} 已保存到云端存储: {}", category, cloudPath);
+                return target;
+            } catch (Throwable e) {
+                log.error("{} 写入云端存储失败: path={}, error={}", category, cloudPath, e.getMessage());
+                throw new IOException("云存储写入失败: " + e.getMessage(), e);
+            }
+        }
         Files.createDirectories(target.getParent());
         Files.write(target, bytes);
-        log.info("{} 已保存到本地: {}", category, target);
-        String cloudPath = cloudPath(category, key, fileName);
-        try {
-            storageService.uploadFile(bytes, contentType, cloudPath, null);
-        } catch (Throwable e) {
-            log.warn("{} 同步云存储失败: path={}, error={}", category, cloudPath, e.getMessage());
-        }
+        log.info("{} 已保存到本地（仅本地存储）: {}", category, target);
         return target;
     }
 
@@ -91,34 +97,37 @@ public class MediaFileStore {
         }
     }
 
-    /** 精确路径读取：本地优先，缺失时从云端回源并落回本地 */
+    /** 精确路径读取：启用云端时以云端为准（仅兼容读取历史本地文件），不再回写本地 */
     public Resource load(FileCategory category, String key, String fileName) {
         Path local = path(category, key, fileName);
-        if (Files.exists(local)) {
-            return new FileSystemResource(local);
+        if (!storageService.isRemoteEnabled()) {
+            return Files.exists(local) ? new FileSystemResource(local) : null;
         }
         String cloudPath = cloudPath(category, key, fileName);
         byte[] bytes = storageService.downloadFile(cloudPath);
-        if (bytes == null) {
-            return null;
+        if (bytes != null) {
+            return new ByteArrayResource(bytes);
         }
-        try {
-            Files.createDirectories(local.getParent());
-            Files.write(local, bytes);
+        // 云端没有时兜底历史本地文件，避免升级前上传的资料无法预览
+        if (Files.exists(local)) {
+            log.info("云端缺失，使用历史本地文件: {}", local);
             return new FileSystemResource(local);
-        } catch (IOException e) {
-            log.warn("云端文件落盘失败: {}, error={}", local, e.getMessage());
-            return null;
         }
+        return null;
     }
 
     /** 按 ID 读取（未知扩展名时按前缀匹配，云端回源默认 .pdf） */
     public Resource loadById(FileCategory category, String id) {
-        Path local = find(category, id);
-        if (local != null) {
-            return new FileSystemResource(local);
+        if (storageService.isRemoteEnabled()) {
+            Resource remote = load(category, null, id + ".pdf");
+            if (remote != null) {
+                return remote;
+            }
+            Path legacy = find(category, id);
+            return legacy != null ? new FileSystemResource(legacy) : null;
         }
-        return load(category, null, id + ".pdf");
+        Path local = find(category, id);
+        return local != null ? new FileSystemResource(local) : null;
     }
 
     /** 按 ID 读取原始字节，不存在返回 null */
@@ -156,6 +165,16 @@ public class MediaFileStore {
 
     /** 删除某个 key 下的全部文件（作业附件按作业 ID 分目录） */
     public void deleteAll(FileCategory category, String key) {
+        if (storageService.isRemoteEnabled()) {
+            String prefix = cloudPath(category, key, "");
+            try {
+                for (String path : storageService.listFiles(prefix)) {
+                    storageService.deleteFile(path);
+                }
+            } catch (Throwable e) {
+                log.warn("删除云端 {} 目录失败: key={}, error={}", category, key, e.getMessage());
+            }
+        }
         Path dir = dir(category, key);
         if (!Files.isDirectory(dir)) {
             return;
@@ -163,12 +182,9 @@ public class MediaFileStore {
         try (var stream = Files.walk(dir)) {
             stream.sorted(Comparator.reverseOrder()).forEach(p -> {
                 try {
-                    if (Files.isRegularFile(p)) {
-                        deleteCloud(cloudPath(category, key, p.getFileName().toString()));
-                    }
                     Files.deleteIfExists(p);
                 } catch (IOException e) {
-                    log.warn("删除 {} 失败: {}", category, p, e.getMessage());
+                    log.warn("删除本地 {} 失败: {}", category, p, e.getMessage());
                 }
             });
         } catch (IOException e) {

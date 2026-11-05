@@ -339,7 +339,7 @@ public class CoursewareController {
         return ApiResponse.success(info);
     }
 
-    /** 删除课件及其切片 */
+    /** 删除课件及其切片、文件 */
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String id) {
         if (coursewareService.findById(id).isEmpty()) {
@@ -347,6 +347,18 @@ public class CoursewareController {
         }
         coursewareService.deleteById(id);
         return ApiResponse.success("课件删除成功", null);
+    }
+
+    /** 课程删除时级联清理课件（内部接口） */
+    @DeleteMapping("/internal/by-course/{courseId}")
+    public ApiResponse<Integer> deleteByCourse(@PathVariable Integer courseId) {
+        return ApiResponse.success(coursewareService.deleteByCourse(courseId));
+    }
+
+    /** 章节删除时级联清理课件（内部接口） */
+    @DeleteMapping("/internal/by-chapter/{chapterId}")
+    public ApiResponse<Integer> deleteByChapter(@PathVariable Long chapterId) {
+        return ApiResponse.success(coursewareService.deleteByChapter(chapterId));
     }
 
     // ==================== 课件语义搜索 ====================

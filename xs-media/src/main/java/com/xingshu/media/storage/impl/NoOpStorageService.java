@@ -61,4 +61,9 @@ public class NoOpStorageService implements StorageService {
     public List<String> listFiles(String prefix) {
         return Collections.emptyList();
     }
+
+    @Override
+    public boolean isRemoteEnabled() {
+        return false;
+    }
 }

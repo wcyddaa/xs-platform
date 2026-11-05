@@ -70,6 +70,24 @@ public class AbilityService extends ServiceImpl<AbilityDimensionMapper, AbilityD
                 .orderByAsc(AbilityDimension::getId));
     }
 
+    /** 教学班删除时级联清理该班的维度、评分、报告与证据 */
+    @Transactional
+    public void deleteByClass(Long classId) {
+        List<AbilityDimension> dimensions = getByClassId(classId);
+        List<Long> dimensionIds = dimensions.stream().map(AbilityDimension::getId).toList();
+        if (!dimensionIds.isEmpty()) {
+            evidenceMapper.delete(new LambdaQueryWrapper<AbilityEvidence>()
+                    .in(AbilityEvidence::getDimensionId, dimensionIds));
+        }
+        studentAbilityMapper.delete(new LambdaQueryWrapper<StudentAbility>()
+                .eq(StudentAbility::getClassId, classId));
+        reportMapper.delete(new LambdaQueryWrapper<StudentAbilityReport>()
+                .eq(StudentAbilityReport::getClassId, classId));
+        remove(new LambdaQueryWrapper<AbilityDimension>()
+                .eq(AbilityDimension::getClassId, classId));
+        log.info("已清理教学班 {} 的能力维度与评分数据", classId);
+    }
+
     /** 新增/更新能力维度 */
     @Transactional
     public AbilityDimension saveDimension(AbilityDimensionDTO dto) {

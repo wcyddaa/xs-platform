@@ -1,6 +1,8 @@
 package com.xingshu.config.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.xingshu.common.base.BaseEntity;
@@ -38,12 +40,16 @@ public class StorageConfig extends BaseEntity {
     /** AGC client_secret 密文（enc:v1:...） */
     private String clientSecret;
 
-    /** 测试状态：untested / success / fail */
+    /** 测试状态：untested / success / fail（允许被清空，故不做 null 忽略） */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String status;
 
-    /** 最近一次测试结果说明 */
+    /** 最近一次测试结果说明（允许被清空，故不做 null 忽略） */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String testMessage;
 
+    /** 最近一次测试时间（连接信息变更后清空） */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime lastTestTime;
 
     /** 是否启用：1-启用 0-停用 */

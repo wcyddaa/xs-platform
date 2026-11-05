@@ -8,7 +8,10 @@ import com.xingshu.course.domain.po.Course;
 import com.xingshu.course.domain.po.CourseClass;
 import com.xingshu.course.service.IChapterService;
 import com.xingshu.course.service.ICourseService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
@@ -17,12 +20,18 @@ import java.util.Map;
 @RequestMapping("/api/courses")
 public class CourseController {
 
+    private static final Logger log = LoggerFactory.getLogger(CourseController.class);
+    private static final String BOOK_API_BASE = "http://localhost:8083";
+
     private final ICourseService courseService;
     private final IChapterService chapterService;
+    private final RestTemplate restTemplate;
 
-    public CourseController(ICourseService courseService, IChapterService chapterService) {
+    public CourseController(ICourseService courseService, IChapterService chapterService,
+                            RestTemplate restTemplate) {
         this.courseService = courseService;
         this.chapterService = chapterService;
+        this.restTemplate = restTemplate;
     }
 
     /**
@@ -177,6 +186,12 @@ public class CourseController {
     @DeleteMapping("/{courseId}/chapters/{chapterId}")
     public ApiResponse<Void> deleteChapter(@PathVariable Long courseId,
                                             @PathVariable Long chapterId) {
+        // 级联删除本章节的课件（ES 元数据、切片与 PDF 文件）
+        try {
+            restTemplate.delete(BOOK_API_BASE + "/api/courseware/internal/by-chapter/" + chapterId);
+        } catch (Exception e) {
+            log.warn("级联删除章节课件失败(chapterId={}): {}", chapterId, e.getMessage());
+        }
         chapterService.removeById(chapterId);
         return ApiResponse.success("删除成功", null);
     }

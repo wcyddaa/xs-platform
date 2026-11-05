@@ -75,14 +75,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     @Override
     public void addUser(User user) {
+        if (user.getUsername() == null || user.getUsername().isBlank()) {
+            throw new IllegalArgumentException("账号（工号）不能为空");
+        }
+        if (user.getPassword() == null || user.getPassword().isBlank()) {
+            throw new IllegalArgumentException("密码不能为空");
+        }
+        if (user.getType() == null || user.getType() < 1 || user.getType() > 3) {
+            throw new IllegalArgumentException("请选择有效身份（管理员/教师/学生）");
+        }
         // 检查用户名是否重复
         User exist = getUserByUsername(user.getUsername());
         if (exist != null) {
-            throw new RuntimeException("账号（工号）已存在，不可重复");
+            throw new IllegalArgumentException("账号（工号）已存在，不可重复");
         }
-        if (user.getPassword() != null && !user.getPassword().isBlank()) {
-            user.setPassword(passwordEncoder.encode(user.getPassword()));
-        }
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
         save(user);
 
         // 如果是学生且指定了行政班，创建绑定关系

@@ -29,6 +29,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
 
     private static final Logger log = LoggerFactory.getLogger(CourseServiceImpl.class);
     private static final String BOOK_API_BASE = "http://localhost:8083";
+    private static final String EXAM_API_BASE = "http://localhost:8084";
 
     private final CourseClassMapper courseClassMapper;
     private final ChapterMapper chapterMapper;
@@ -147,26 +148,35 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     @Override
     @Transactional
     public void deleteCourse(Long courseId) {
-        // 检查关联数据，存在则拒绝删除
         Map<String, Object> checkResult = preCheckDelete(courseId);
         if (!Boolean.TRUE.equals(checkResult.get("exists"))) {
             throw new IllegalStateException("课程不存在");
         }
 
         long classCount = ((Number) checkResult.getOrDefault("classCount", 0L)).longValue();
-        boolean hasTextbook = Boolean.TRUE.equals(checkResult.get("hasTextbook"));
-
-        StringBuilder sb = new StringBuilder();
         if (classCount > 0) {
-            sb.append("仍有 ").append(classCount).append(" 个教学班绑定，请先到「分配教学班」中解除绑定；");
-        }
-        if (hasTextbook) {
-            sb.append("仍有教材绑定（").append(checkResult.get("textbookTitle")).append("），请先清除教材绑定；");
+            log.info("课程 {} 仍绑定 {} 个教学班，将删除绑定关系（教学班保留）", courseId, classCount);
         }
 
-        if (sb.length() > 0) {
-            sb.insert(0, "无法删除课程「" + checkResult.get("courseName") + "」：");
-            throw new IllegalStateException(sb.toString());
+        // 多对多：只删除课程-教学班绑定关系
+        LambdaQueryWrapper<CourseClass> classWrapper = new LambdaQueryWrapper<>();
+        classWrapper.eq(CourseClass::getCourseId, courseId);
+        courseClassMapper.delete(classWrapper);
+
+        // 级联删除：课件（含 ES 元数据、切片与存储文件）
+        try {
+            restTemplate.delete(BOOK_API_BASE + "/api/courseware/internal/by-course/" + courseId);
+            log.info("已级联删除课程 {} 的课件", courseId);
+        } catch (Exception e) {
+            log.warn("级联删除课件失败(courseId={}): {}", courseId, e.getMessage());
+        }
+
+        // 级联删除：该课程的模板作业（含学生作业与附件）
+        try {
+            restTemplate.delete(EXAM_API_BASE + "/api/homework/templates/course/" + courseId);
+            log.info("已级联删除课程 {} 的作业", courseId);
+        } catch (Exception e) {
+            log.warn("级联删除作业失败(courseId={}): {}", courseId, e.getMessage());
         }
 
         // 自动级联删除：章节

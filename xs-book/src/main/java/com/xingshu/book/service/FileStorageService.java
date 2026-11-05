@@ -53,4 +53,9 @@ public class FileStorageService {
     public void deleteTextbook(String id) {
         fileStore.deleteById(FileCategory.TEXTBOOK, id);
     }
+
+    /** 删除课件文件（本地 + 云存储） */
+    public void deleteCourseware(String id) {
+        fileStore.deleteById(FileCategory.COURSEWARE, id);
+    }
 }

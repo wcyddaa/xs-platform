@@ -42,6 +42,7 @@ public class ClassInfoServiceImpl extends ServiceImpl<ClassInfoMapper, ClassInfo
     private static final String EXAM_API_BASE = "http://localhost:8084";
     private static final String CONFIG_API_BASE = "http://localhost:8086";
     private static final String LEARNING_API_BASE = "http://localhost:8087";
+    private static final String BOOK_API_BASE = "http://localhost:8083";
 
     private final ClassStudentMapper classStudentMapper;
     private final ClassTeacherMapper classTeacherMapper;
@@ -172,21 +173,12 @@ public class ClassInfoServiceImpl extends ServiceImpl<ClassInfoMapper, ClassInfo
             hasTeacher = false;
         }
 
-        // 管理员删除：按原逻辑检查
-        StringBuilder sb = new StringBuilder();
+        // 管理员删除：教学班删除会级联清理所有从属数据，不再因学生/课程存在而阻塞
         if (hasTeacher) {
-            sb.append("仍有教师绑定（").append(checkResult.get("teacherName")).append("），请先解除教师绑定；");
+            log.info("教学班 {} 仍有教师绑定，将随教学班一并清理", classId);
         }
-        if (studentCount > 0) {
-            sb.append("仍有 ").append(studentCount).append(" 名学生绑定，请先移除所有学生；");
-        }
-        if (courseCount > 0) {
-            sb.append("仍有 ").append(courseCount).append(" 门课程绑定，请先解除课程绑定；");
-        }
-
-        if (sb.length() > 0) {
-            sb.insert(0, "无法删除教学班「" + checkResult.get("className") + "」：");
-            throw new IllegalStateException(sb.toString());
+        if (studentCount > 0 || courseCount > 0) {
+            log.info("教学班 {} 存在 {} 名学生、{} 门课程，将一并清理绑定关系", classId, studentCount, courseCount);
         }
 
         // 校验通过后再清除教师绑定，避免删除失败却误删其他教师的绑定
@@ -222,10 +214,36 @@ public class ClassInfoServiceImpl extends ServiceImpl<ClassInfoMapper, ClassInfo
             log.warn("级联删除智能体配置失败(classId={}): {}", classId, e.getMessage());
         }
 
+        // 级联删除：教材绑定（多对多只删绑定关系，教材本身保留）
+        try {
+            restTemplate.delete(BOOK_API_BASE + "/api/textbooks/internal/class/" + classId);
+            log.info("已解除教学班的教材绑定: classId={}", classId);
+        } catch (Exception e) {
+            log.warn("解除教材绑定失败(classId={}): {}", classId, e.getMessage());
+        }
+
+        // 级联删除：能力维度
+        try {
+            restTemplate.delete(LEARNING_API_BASE + "/api/ability/internal/class/" + classId);
+            log.info("已级联删除教学班能力维度: classId={}", classId);
+        } catch (Exception e) {
+            log.warn("级联删除能力维度失败(classId={}): {}", classId, e.getMessage());
+        }
+
         // 删除教学班-教师绑定
         LambdaQueryWrapper<ClassTeacher> teacherWrapper = new LambdaQueryWrapper<>();
         teacherWrapper.eq(ClassTeacher::getClassId, classId);
         classTeacherMapper.delete(teacherWrapper);
+
+        // 删除教学班-学生绑定
+        LambdaQueryWrapper<ClassStudent> studentWrapper = new LambdaQueryWrapper<>();
+        studentWrapper.eq(ClassStudent::getClassId, classId);
+        classStudentMapper.delete(studentWrapper);
+
+        // 删除教学班-课程绑定（课程本身保留）
+        LambdaQueryWrapper<CourseClass> courseWrapper = new LambdaQueryWrapper<>();
+        courseWrapper.eq(CourseClass::getClassId, classId);
+        courseClassMapper.delete(courseWrapper);
 
         // 删除教学班本身
         removeById(classId);

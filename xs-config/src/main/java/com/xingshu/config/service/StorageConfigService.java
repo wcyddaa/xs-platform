@@ -111,6 +111,7 @@ public class StorageConfigService {
         if (connectionChanged) {
             target.setStatus("untested");
             target.setTestMessage(null);
+            target.setLastTestTime(null);
         }
         if (input.getEnabled() != null) {
             target.setEnabled(input.getEnabled());
@@ -136,12 +137,14 @@ public class StorageConfigService {
         StorageConfig stored = input.getId() == null ? null : mapper.selectById(input.getId());
         String provider = normalizeProvider(str(input.getProvider()).isBlank()
                 ? (stored != null ? stored.getProvider() : null) : input.getProvider());
-        String clientId = firstNonBlank(input.getClientId(), stored != null ? stored.getClientId() : null);
+        // 只有测试当前已保存的同一 provider 时，才回退使用库里保存的字段与密钥，避免把 AGC 密钥套到别的 provider 上
+        StorageConfig base = stored != null && provider.equals(stored.getProvider()) ? stored : null;
+        String clientId = firstNonBlank(input.getClientId(), base != null ? base.getClientId() : null);
         String secret = firstNonBlank(input.getClientSecret(),
-                stored != null ? cipher.decrypt(stored.getClientSecret()) : null);
-        String endpoint = firstNonBlank(input.getEndpoint(), stored != null ? stored.getEndpoint() : null);
-        String region = firstNonBlank(input.getRegion(), stored != null ? stored.getRegion() : null);
-        String bucket = firstNonBlank(input.getBucket(), stored != null ? stored.getBucket() : null);
+                base != null ? cipher.decrypt(base.getClientSecret()) : null);
+        String endpoint = firstNonBlank(input.getEndpoint(), base != null ? base.getEndpoint() : null);
+        String region = firstNonBlank(input.getRegion(), base != null ? base.getRegion() : null);
+        String bucket = firstNonBlank(input.getBucket(), base != null ? base.getBucket() : null);
 
         TestResult result = switch (provider) {
             case "local" -> testLocal();
@@ -150,24 +153,42 @@ public class StorageConfigService {
             default -> testAgc(clientId, secret);
         };
 
-        StorageConfig target = stored != null ? stored : new StorageConfig();
-        target.setStatus(result.success() ? "success" : "fail");
-        target.setTestMessage(result.message().length() > 400
-                ? result.message().substring(0, 400) : result.message());
-        target.setLastTestTime(LocalDateTime.now());
-        target.setUpdaterId(operatorId);
-        target.setProvider(provider);
-        target.setEndpoint(endpoint);
-        target.setBucket(bucket);
-        target.setRegion(region);
-        target.setClientId(clientId);
-        if (stored == null) {
-            // 首次测试只返回结果，不落库：避免点一次测试就产生一条启用记录
-            target.setEnabled(input.getEnabled());
-        } else {
-            mapper.updateById(target);
+        StorageConfig tested = new StorageConfig();
+        tested.setId(stored != null ? stored.getId() : null);
+        tested.setProvider(provider);
+        tested.setEndpoint(endpoint);
+        tested.setBucket(bucket);
+        tested.setRegion(region);
+        tested.setClientId(clientId);
+        // 仅用于回传“是否已配置密钥”，对外接口只返回布尔值
+        tested.setClientSecret(secret);
+        tested.setEnabled(input.getEnabled());
+        tested.setStatus(result.success() ? "success" : "fail");
+        tested.setTestMessage(cut(result.message()));
+        tested.setLastTestTime(LocalDateTime.now());
+
+        // 测试只回传结果，不改写已保存的连接信息；仅当测试的正是已保存的那套配置时才记录测试状态
+        if (stored != null && sameConnection(stored, provider, endpoint, region, bucket, clientId)) {
+            stored.setStatus(tested.getStatus());
+            stored.setTestMessage(tested.getTestMessage());
+            stored.setLastTestTime(tested.getLastTestTime());
+            stored.setUpdaterId(operatorId);
+            mapper.updateById(stored);
         }
-        return target;
+        return tested;
+    }
+
+    private static boolean sameConnection(StorageConfig stored, String provider, String endpoint,
+                                          String region, String bucket, String clientId) {
+        return str(stored.getProvider()).equals(str(provider))
+                && str(stored.getEndpoint()).equals(str(endpoint))
+                && str(stored.getRegion()).equals(str(region))
+                && str(stored.getBucket()).equals(str(bucket))
+                && str(stored.getClientId()).equals(str(clientId));
+    }
+
+    private static String cut(String message) {
+        return message != null && message.length() > 400 ? message.substring(0, 400) : message;
     }
 
     private TestResult testAgc(String clientId, String secret) {

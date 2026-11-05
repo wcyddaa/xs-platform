@@ -26,11 +26,14 @@ public class CoursewareService {
 
     private final ElasticsearchClient elasticsearchClient;
     private final EmbeddingModel embeddingModel;
+    private final FileStorageService fileStorageService;
 
     public CoursewareService(ElasticsearchClient elasticsearchClient,
-                             EmbeddingModel embeddingModel) {
+                             EmbeddingModel embeddingModel,
+                             FileStorageService fileStorageService) {
         this.elasticsearchClient = elasticsearchClient;
         this.embeddingModel = embeddingModel;
+        this.fileStorageService = fileStorageService;
     }
 
     // ==================== 课件CRUD ====================
@@ -86,7 +89,7 @@ public class CoursewareService {
         }
     }
 
-    /** 删除课件及其所有切片 */
+    /** 删除课件及其所有切片、以及存储中的 PDF 文件 */
     public void deleteById(String id) {
         try {
             // 先删除切片
@@ -107,6 +110,71 @@ public class CoursewareService {
             );
         } catch (Exception e) {
             throw new RuntimeException("删除课件失败", e);
+        }
+        // 元数据删除成功后再清理文件，失败只记录日志，避免影响删除结果
+        try {
+            fileStorageService.deleteCourseware(id);
+        } catch (Exception e) {
+            log.warn("删除课件文件失败: id={}, {}", id, e.getMessage());
+        }
+    }
+
+    /** 按课程批量删除课件（课程删除时级联） */
+    public int deleteByCourse(Integer courseId) {
+        return deleteByQuery(Query.of(q -> q.term(t -> t.field("courseId").value(courseId))));
+    }
+
+    /** 按章节批量删除课件（章节删除时级联） */
+    public int deleteByChapter(Long chapterId) {
+        return deleteByQuery(Query.of(q -> q.term(t -> t.field("chapterId").value(chapterId))));
+    }
+
+    private int deleteByQuery(Query query) {
+        try {
+            List<String> ids = new ArrayList<>();
+            var response = elasticsearchClient.search(s -> s
+                            .index("courseware_index")
+                            .query(query)
+                            .size(1000),
+                    JsonNode.class
+            );
+            for (var hit : response.hits().hits()) {
+                ids.add(hit.id());
+            }
+            if (ids.isEmpty()) {
+                return 0;
+            }
+            // 先删这些课件对应的切片
+            try {
+                List<co.elastic.clients.elasticsearch._types.FieldValue> values = ids.stream()
+                        .map(co.elastic.clients.elasticsearch._types.FieldValue::of)
+                        .toList();
+                elasticsearchClient.deleteByQuery(d -> d
+                        .index("courseware_chunk_vector")
+                        .query(q -> q.terms(t -> t.field("metadata.coursewareId.keyword").terms(v -> v.value(values))))
+                        .refresh(true)
+                        .conflicts(Conflicts.Proceed)
+                );
+            } catch (Exception e) {
+                log.warn("批量删除课件切片失败: {}", e.getMessage());
+            }
+            elasticsearchClient.deleteByQuery(d -> d
+                    .index("courseware_index")
+                    .query(query)
+                    .refresh(true)
+                    .conflicts(Conflicts.Proceed)
+            );
+            for (String id : ids) {
+                try {
+                    fileStorageService.deleteCourseware(id);
+                } catch (Exception e) {
+                    log.warn("删除课件文件失败: id={}, {}", id, e.getMessage());
+                }
+            }
+            return ids.size();
+        } catch (Exception e) {
+            log.warn("批量删除课件失败: {}", e.getMessage());
+            return 0;
         }
     }
 

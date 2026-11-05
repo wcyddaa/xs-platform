@@ -10,11 +10,13 @@ import com.xingshu.common.constant.CommonConstants;
 import com.xingshu.exam.domain.po.TemplateHomework;
 import com.xingshu.exam.mapper.TemplateHomeworkMapper;
 import com.xingshu.exam.service.HomeworkFileService;
+import com.xingshu.exam.service.IClassHomeworkService;
 import com.xingshu.exam.service.IStudentHomeworkService;
 import com.xingshu.exam.service.ITemplateHomeworkService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -28,11 +30,14 @@ public class TemplateHomeworkServiceImpl extends ServiceImpl<TemplateHomeworkMap
 
     private final IStudentHomeworkService studentHomeworkService;
     private final HomeworkFileService homeworkFileService;
+    private final IClassHomeworkService classHomeworkService;
 
     public TemplateHomeworkServiceImpl(IStudentHomeworkService studentHomeworkService,
-                                       HomeworkFileService homeworkFileService) {
+                                       HomeworkFileService homeworkFileService,
+                                       IClassHomeworkService classHomeworkService) {
         this.studentHomeworkService = studentHomeworkService;
         this.homeworkFileService = homeworkFileService;
+        this.classHomeworkService = classHomeworkService;
     }
 
     @Override
@@ -112,22 +117,26 @@ public class TemplateHomeworkServiceImpl extends ServiceImpl<TemplateHomeworkMap
     }
 
     @Override
+    @Transactional
     public void deleteByClassId(Long classId) {
         LambdaQueryWrapper<TemplateHomework> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TemplateHomework::getClassId, classId);
         List<TemplateHomework> templates = list(wrapper);
         if (!templates.isEmpty()) {
-            // 级联删除：附件文件 + 实例作业
+            // 级联删除：附件文件 + 实例作业 + 班级作业关联
             for (TemplateHomework t : templates) {
                 homeworkFileService.deleteAttachments(t.getId());
             }
             List<Long> templateIds = templates.stream().map(TemplateHomework::getId).collect(Collectors.toList());
             studentHomeworkService.deleteByTemplateIds(templateIds);
+            classHomeworkService.deleteByTemplateIds(templateIds);
         }
         remove(wrapper);
+        log.info("已删除教学班 {} 的 {} 份作业", classId, templates.size());
     }
 
     @Override
+    @Transactional
     public void deleteByCourseId(Long courseId) {
         LambdaQueryWrapper<TemplateHomework> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TemplateHomework::getCourseId, courseId);
@@ -138,7 +147,9 @@ public class TemplateHomeworkServiceImpl extends ServiceImpl<TemplateHomeworkMap
             }
             List<Long> templateIds = templates.stream().map(TemplateHomework::getId).collect(Collectors.toList());
             studentHomeworkService.deleteByTemplateIds(templateIds);
+            classHomeworkService.deleteByTemplateIds(templateIds);
         }
         remove(wrapper);
+        log.info("已删除课程 {} 的 {} 份作业", courseId, templates.size());
     }
 }

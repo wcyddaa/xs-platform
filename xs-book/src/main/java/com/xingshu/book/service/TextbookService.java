@@ -77,8 +77,7 @@ public class TextbookService {
     }
 
     /**
-     * 绑定教材到教学班（classId 为 null 表示解绑）
-     * 读取完整文档后整体回写，保证其它字段不被覆盖
+     * 绑定教材到教学班（多对多）：已绑定的班级不受影响，重复绑定幂等
      *
      * @return 更新后的教材；教材不存在时返回空
      */
@@ -88,17 +87,116 @@ public class TextbookService {
             return Optional.empty();
         }
         TextbookEntity entity = existing.get();
-        entity.setClassId(classId);
-        entity.setClassName(classId != null ? className : null);
+        normalizeBindings(entity);
+        if (classId != null && !entity.getClassIds().contains(classId)) {
+            entity.getClassIds().add(classId);
+            entity.getClassNames().add(className == null ? "" : className);
+        }
+        applyBindings(entity);
+        return save(entity);
+    }
+
+    /** 解除教材与某个教学班的绑定，其它班级保留 */
+    public Optional<TextbookEntity> unbindClass(String id, Long classId) {
+        Optional<TextbookEntity> existing = findById(id);
+        if (existing.isEmpty()) {
+            return Optional.empty();
+        }
+        TextbookEntity entity = existing.get();
+        normalizeBindings(entity);
+        int index = entity.getClassIds().indexOf(classId);
+        if (index >= 0) {
+            entity.getClassIds().remove(index);
+            if (index < entity.getClassNames().size()) {
+                entity.getClassNames().remove(index);
+            }
+        }
+        applyBindings(entity);
+        return save(entity);
+    }
+
+    /** 教学班被删除时，解除所有教材对该班的绑定（多对多只删绑定关系） */
+    public int unbindAllForClass(Long classId) {
+        int affected = 0;
+        try {
+            // 先刷新索引，避免刚写入的绑定关系查不到
+            elasticsearchClient.indices().refresh(r -> r.index("textbook_index"));
+            var response = elasticsearchClient.search(s -> s
+                            .index("textbook_index")
+                            .query(q -> q.bool(b -> b
+                                    .should(s1 -> s1.terms(t -> t.field("classIds")
+                                            .terms(v -> v.value(List.of(co.elastic.clients.elasticsearch._types.FieldValue.of(classId))))))
+                                    .should(s2 -> s2.term(t -> t.field("classId").value(classId)))
+                                    .minimumShouldMatch("1")))
+                            .size(1000),
+                    JsonNode.class
+            );
+            for (var hit : response.hits().hits()) {
+                TextbookEntity entity = findById(hit.id()).orElse(null);
+                if (entity == null) {
+                    continue;
+                }
+                normalizeBindings(entity);
+                int index = entity.getClassIds().indexOf(classId);
+                if (index >= 0) {
+                    entity.getClassIds().remove(index);
+                    if (index < entity.getClassNames().size()) {
+                        entity.getClassNames().remove(index);
+                    }
+                    applyBindings(entity);
+                    save(entity);
+                    affected++;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("解除教学班 {} 的教材绑定失败: {}", classId, e.getMessage());
+        }
+        return affected;
+    }
+
+    /** 修改教材名称 */
+    public Optional<TextbookEntity> updateTitle(String id, String title) {
+        Optional<TextbookEntity> existing = findById(id);
+        if (existing.isEmpty()) {
+            return Optional.empty();
+        }
+        TextbookEntity entity = existing.get();
+        entity.setTitle(title);
+        return save(entity);
+    }
+
+    /** 旧数据只有单个 classId，统一迁移到 classIds/classNames */
+    private void normalizeBindings(TextbookEntity entity) {
+        if (entity.getClassIds() == null) {
+            entity.setClassIds(new ArrayList<>());
+        }
+        if (entity.getClassNames() == null) {
+            entity.setClassNames(new ArrayList<>());
+        }
+        if (entity.getClassId() != null) {
+            if (!entity.getClassIds().contains(entity.getClassId())) {
+                entity.getClassIds().add(entity.getClassId());
+                entity.getClassNames().add(entity.getClassName() == null ? "" : entity.getClassName());
+            }
+            entity.setClassId(null);
+        }
+    }
+
+    private void applyBindings(TextbookEntity entity) {
+        entity.setClassName(entity.getClassNames().isEmpty() ? null : String.join("、", entity.getClassNames()));
         entity.setUpdateTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+    }
+
+    private Optional<TextbookEntity> save(TextbookEntity entity) {
         try {
             elasticsearchClient.index(i -> i
                     .index("textbook_index")
-                    .id(id)
+                    .id(entity.getId())
+                    .refresh(co.elastic.clients.elasticsearch._types.Refresh.WaitFor)
                     .document(entity)
             );
         } catch (Exception e) {
-            throw new RuntimeException("更新教材教学班绑定失败", e);
+            throw new RuntimeException("更新教材失败", e);
         }
         return Optional.of(entity);
     }
@@ -233,8 +331,13 @@ public class TextbookService {
             }
 
             if (classId != null) {
+                // 多对多：命中 classIds 数组，同时兼容仅有单个 classId 的旧文档
                 filterQueries.add(Query.of(q -> q
-                        .term(t -> t.field("classId").value(classId))
+                        .bool(b -> b
+                                .should(s1 -> s1.terms(t -> t.field("classIds")
+                                        .terms(v -> v.value(List.of(co.elastic.clients.elasticsearch._types.FieldValue.of(classId))))))
+                                .should(s2 -> s2.term(t -> t.field("classId").value(classId)))
+                                .minimumShouldMatch("1"))
                 ));
             }
 
@@ -269,6 +372,8 @@ public class TextbookService {
                         entity.setAuthor(getText(source, "author"));
                         entity.setCategory(getText(source, "category"));
                         entity.setClassId(getLong(source, "classId"));
+                        entity.setClassIds(getLongList(source, "classIds"));
+                        entity.setClassNames(getTextList(source, "classNames"));
                         entity.setClassName(getText(source, "className"));
                         entity.setTotalPages(getInt(source, "totalPages"));
                         entity.setPublishDate(getText(source, "publishDate"));
@@ -348,5 +453,19 @@ public class TextbookService {
     private Long getLong(JsonNode source, String field) {
         if (source == null || source.get(field) == null) return null;
         return source.get(field).asLong();
+    }
+
+    private List<Long> getLongList(JsonNode source, String field) {
+        if (source == null || source.get(field) == null || !source.get(field).isArray()) return null;
+        List<Long> list = new ArrayList<>();
+        source.get(field).forEach(node -> list.add(node.asLong()));
+        return list;
+    }
+
+    private List<String> getTextList(JsonNode source, String field) {
+        if (source == null || source.get(field) == null || !source.get(field).isArray()) return null;
+        List<String> list = new ArrayList<>();
+        source.get(field).forEach(node -> list.add(node.asText()));
+        return list;
     }
 }

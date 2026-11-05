@@ -35,6 +35,13 @@ public class AbilityController {
         return ApiResponse.success(abilityService.getByClassId(classId));
     }
 
+    /** 教学班删除时级联清理能力维度与评分（内部接口） */
+    @DeleteMapping("/internal/class/{classId}")
+    public ApiResponse<Void> deleteByClass(@PathVariable Long classId) {
+        abilityService.deleteByClass(classId);
+        return ApiResponse.success("已清理", null);
+    }
+
     /** 新增能力维度 */
     @PostMapping("/dimensions")
     public ApiResponse<AbilityDimension> createDimension(@RequestBody AbilityDimensionDTO dto) {

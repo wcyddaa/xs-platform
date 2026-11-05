@@ -227,6 +227,47 @@ public class TextbookController {
     }
 
     /**
+     * 解除教材与某个教学班的绑定（多对多，其它班级保留）
+     * DELETE /api/textbooks/{id}/classes/{classId}
+     */
+    @DeleteMapping("/{id}/classes/{classId}")
+    public ResponseEntity<ApiResponse<TextbookEntity>> unbindClass(
+            @PathVariable String id,
+            @PathVariable Long classId) {
+        return textbookService.unbindClass(id, classId)
+                .map(entity -> ResponseEntity.ok(ApiResponse.success(entity)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponse.error(404, "教材不存在")));
+    }
+
+    /**
+     * 修改教材名称
+     * PUT /api/textbooks/{id}/title
+     */
+    @PutMapping("/{id}/title")
+    public ResponseEntity<ApiResponse<TextbookEntity>> updateTitle(
+            @PathVariable String id,
+            @RequestBody Map<String, String> body) {
+        String title = body.get("title");
+        if (title == null || title.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(400, "教材名称不能为空"));
+        }
+        return textbookService.updateTitle(id, title.trim())
+                .map(entity -> ResponseEntity.ok(ApiResponse.success(entity)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponse.error(404, "教材不存在")));
+    }
+
+    /**
+     * 教学班删除时解除所有教材绑定（内部接口）
+     * DELETE /api/textbooks/internal/class/{classId}
+     */
+    @DeleteMapping("/internal/class/{classId}")
+    public ApiResponse<Integer> unbindAllForClass(@PathVariable Long classId) {
+        return ApiResponse.success(textbookService.unbindAllForClass(classId));
+    }
+
+    /**
      * 根据ID查询教材
      */
     @GetMapping("/{id}")

@@ -67,4 +67,12 @@ public interface StorageService {
      * 列出指定前缀下的所有文件
      */
     List<String> listFiles(String prefix);
+
+    /**
+     * 当前是否真的启用了云端存储。
+     * <p>关闭云端（含“仅本地磁盘”）时文件只读写本地，不再做任何云端同步。</p>
+     */
+    default boolean isRemoteEnabled() {
+        return true;
+    }
 }

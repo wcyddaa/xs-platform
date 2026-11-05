@@ -27,11 +27,21 @@ public class TextbookEntity {
     @Field(type = FieldType.Text, analyzer = "ik_max_word")
     private String category;               // 学科分类
 
+    /** 绑定教学班ID（多对多，教材可被多个教学班共用） */
     @Field(type = FieldType.Long)
-    private Long classId;                  // 绑定教学班ID（教材按教学班归属）
+    private java.util.List<Long> classIds;
 
+    /** 兼容旧数据：单班绑定ID，新数据不再写入 */
+    @Field(type = FieldType.Long)
+    private Long classId;
+
+    /** 绑定教学班名称（与 classIds 一一对应） */
     @Field(type = FieldType.Keyword)
-    private String className;              // 绑定教学班名称（冗余）
+    private java.util.List<String> classNames;
+
+    /** 绑定教学班名称，多个用逗号分隔（冗余展示） */
+    @Field(type = FieldType.Keyword)
+    private String className;
 
     @Field(type = FieldType.Integer)
     private Integer totalPages;            // 总页数

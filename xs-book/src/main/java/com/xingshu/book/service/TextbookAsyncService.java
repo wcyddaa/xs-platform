@@ -124,28 +124,18 @@ public class TextbookAsyncService {
             }
             progressTracker.update(taskId, totalPages > 0 ? totalPages : 1, "云端存储文件已删除");
 
-            // ===== 阶段2：数据库 =====
-            if (totalPages > 0) {
-                progressTracker.switchPhase(taskId, "database", totalPages,
-                        "正在删除数据库切片...");
-                try {
-                    vectorSearchService.deleteByTextbookId(id);
-                } catch (Throwable e) {
-                    log.warn("删除数据库切片失败: id={}, error={}", id, e.getMessage(), e);
-                }
-                progressTracker.update(taskId, totalPages, "数据库切片已删除");
-            }
-
-            // 3. 删除教材元数据
-            textbookService.deleteById(id);
-
-            // 4. 清除课程中的教材绑定
+            // ===== 阶段2：数据库（无论是否有页数都清理切片，避免残留） =====
+            progressTracker.switchPhase(taskId, "database", totalPages > 0 ? totalPages : 1,
+                    "正在删除数据库切片...");
             try {
-                String clearUrl = "http://localhost:8082/api/courses/textbook/" + id + "/clear";
-                new RestTemplate().put(clearUrl, null);
+                vectorSearchService.deleteByTextbookId(id);
             } catch (Throwable e) {
-                log.warn("清除课程教材绑定失败: textbookId={}, error={}", id, e.getMessage(), e);
+                log.warn("删除数据库切片失败: id={}, error={}", id, e.getMessage(), e);
             }
+            progressTracker.update(taskId, totalPages > 0 ? totalPages : 1, "数据库切片已删除");
+
+            // 3. 删除教材元数据（教材与教学班的绑定随文档一并删除）
+            textbookService.deleteById(id);
 
             progressTracker.complete(taskId);
             log.info("教材异步删除完成: id={}", id);
