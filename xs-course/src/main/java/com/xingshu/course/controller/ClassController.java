@@ -46,6 +46,28 @@ public class ClassController {
     }
 
     /**
+     * 获取教学班详情（含学生人数与教师姓名，供 AI 上下文注入使用）
+     */
+    @GetMapping("/{id}")
+    public ApiResponse<ClassInfo> detail(@PathVariable Long id) {
+        ClassInfo classInfo = classInfoService.getById(id);
+        if (classInfo == null) {
+            return ApiResponse.error(404, "教学班不存在");
+        }
+        List<ClassStudent> students = classInfoService.getStudents(id);
+        classInfo.setStudentCount((long) students.size());
+        List<ClassTeacher> teachers = classInfoService.getTeachers(id);
+        if (!teachers.isEmpty()) {
+            classInfo.setTeacherNames(teachers.stream()
+                    .map(ClassTeacher::getTeacherName)
+                    .filter(name -> name != null && !name.isBlank())
+                    .distinct()
+                    .collect(java.util.stream.Collectors.joining("、")));
+        }
+        return ApiResponse.success(classInfo);
+    }
+
+    /**
      * 创建教学班
      */
     @PostMapping
